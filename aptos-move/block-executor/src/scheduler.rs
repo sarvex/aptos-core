@@ -3,8 +3,9 @@
 
 use aptos_infallible::Mutex;
 use crossbeam::utils::CachePadded;
+use rayon::vec;
 use std::{
-    // cmp::min,
+    cmp::min,
     hint,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -124,7 +125,7 @@ pub struct Scheduler {
     /// The number of times execution_idx and validation_idx are decreased.
     decrease_cnt: AtomicUsize,
 
-    commit_idx: AtomicUsize,
+    commit_batch_idx: AtomicUsize,
 
     /// Number of tasks used to track when transactions can be committed, incremented / decremented
     /// as new validation or execution tasks are created and completed.
@@ -141,17 +142,26 @@ pub struct Scheduler {
     max_gas: u64,
     num_commit: AtomicUsize,
     is_first: AtomicBool,
+
+    // batch labeled with 0, ..., batch_num-1
+    // batch_size = (num_txn + batch_num - 1) / batch_num
+    // batch i contains txns [i * batch_size, min( (i + 1) * batch_size - 1, txn_num - 1 )]
+    // txn i belongs to batch (i / batch_size)
+    batch_num: usize,
+    batch_size: usize,
+    num_active_tasks_per_batch: Vec<AtomicUsize>,
 }
 
 /// Public Interfaces for the Scheduler
 impl Scheduler {
-    pub fn new(num_txns: usize) -> Self {
+    pub fn new(num_txns: usize, max_gas: u64, batch_num: usize, min_batch_size: usize) -> Self {
+        let batch_num = min(batch_num, num_txns / min_batch_size + 1);
         Self {
             num_txns,
             execution_idx: AtomicUsize::new(0),
             validation_idx: AtomicUsize::new(0),
             decrease_cnt: AtomicUsize::new(0),
-            commit_idx: AtomicUsize::new(0),
+            commit_batch_idx: AtomicUsize::new(0),
             num_active_tasks: AtomicUsize::new(0),
             done_marker: AtomicBool::new(false),
             txn_dependency: (0..num_txns)
@@ -160,14 +170,19 @@ impl Scheduler {
             txn_status: (0..num_txns)
                 .map(|_| CachePadded::new(Mutex::new(TransactionStatus::ReadyToExecute(0, None))))
                 .collect(),
-            max_gas: u64::MAX,
+            max_gas,
             num_commit: AtomicUsize::new(0),
             is_first: AtomicBool::new(true),
+            batch_num,
+            batch_size: (num_txns + batch_num - 1) / batch_num,
+            num_active_tasks_per_batch: std::iter::repeat_with(|| AtomicUsize::new(0))
+                .take(batch_num)
+                .collect(),
         }
     }
 
     /// Return the number of transactions to be executed from the block.
-    pub fn num_txn_to_execute(&self) -> usize {
+    pub fn num_txn(&self) -> usize {
         self.num_txns
     }
 
@@ -175,16 +190,24 @@ impl Scheduler {
         self.max_gas
     }
 
-    pub fn num_txn_to_commit(&self) -> usize {
+    pub fn batch_num(&self) -> usize {
+        self.batch_num
+    }
+
+    pub fn batch_size(&self) -> usize {
+        self.batch_size
+    }
+
+    pub fn num_txn_committed(&self) -> usize {
         self.num_commit.load(Ordering::SeqCst)
     }
 
-    pub fn get_commit_idx(&self) -> usize {
-        self.commit_idx.load(Ordering::SeqCst)
+    pub fn get_commit_batch_idx(&self) -> usize {
+        self.commit_batch_idx.load(Ordering::SeqCst)
     }
 
-    pub fn increase_commit_idx(&self, target_idx: usize) {
-        self.commit_idx.fetch_max(target_idx, Ordering::SeqCst);
+    pub fn increment_commit_batch_idx(&self) {
+        self.commit_batch_idx.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn is_first(&self) -> bool {
@@ -232,7 +255,8 @@ impl Scheduler {
         }
 
         // Must create guard before incremeting validation_idx.
-        let guard = TaskGuard::new(&self.num_active_tasks);
+        let guard =
+            TaskGuard::new(&self.num_active_tasks_per_batch[idx_to_validate / self.batch_size]);
         // let idx_to_validate = self.validation_idx.fetch_add(1, Ordering::SeqCst);
 
         // If incarnation was last executed, and thus ready for validation,
@@ -484,7 +508,8 @@ impl Scheduler {
         }
 
         // Must create guard before incremeting validation_idx.
-        let guard = TaskGuard::new(&self.num_active_tasks);
+        let guard =
+            TaskGuard::new(&self.num_active_tasks_per_batch[idx_to_validate / self.batch_size]);
         let idx_to_validate = self.validation_idx.fetch_add(1, Ordering::SeqCst);
 
         // If incarnation was last executed, and thus ready for validation,
@@ -514,7 +539,8 @@ impl Scheduler {
         }
 
         // Must create a guard before incrementing execution_idx.
-        let guard = TaskGuard::new(&self.num_active_tasks);
+        let guard =
+            TaskGuard::new(&self.num_active_tasks_per_batch[idx_to_execute / self.batch_size]);
 
         let idx_to_execute = self.execution_idx.fetch_add(1, Ordering::SeqCst);
 
@@ -607,6 +633,41 @@ impl Scheduler {
     //         false
     //     }
     // }
+
+    // batch labeled with 0, ..., batch_num-1
+    // batch_size = (num_txn + batch_num - 1) / batch_num
+    // batch i contains txns [i * batch_size, min( (i + 1) * batch_size - 1, txn_num - 1 )]
+    // txn i belongs to batch (i / batch_size)
+    // return the last committed batch id + 1
+    pub fn check_batch_done(&self) -> usize {
+        loop {
+            let cmt_batch_idx = self.commit_batch_idx.load(Ordering::SeqCst);
+            assert!(cmt_batch_idx <= self.batch_num);
+            if cmt_batch_idx == self.batch_num {
+                return cmt_batch_idx;
+            }
+
+            let observed_cnt = self.decrease_cnt.load(Ordering::SeqCst);
+            let val_idx = self.validation_idx.load(Ordering::SeqCst);
+            let exec_idx = self.execution_idx.load(Ordering::SeqCst);
+            let num_tasks = self.num_active_tasks_per_batch[cmt_batch_idx].load(Ordering::SeqCst);
+            let batch_end = min((cmt_batch_idx + 1) * self.batch_size - 1, self.num_txns - 1);
+            if min(exec_idx, val_idx) <= batch_end || num_tasks > 0 {
+                // There is work remaining in the current batch.
+                return cmt_batch_idx;
+            }
+
+            // Re-read and make sure decrease_cnt hasn't changed.
+            if observed_cnt == self.decrease_cnt.load(Ordering::SeqCst) {
+                // self.done_marker.store(true, Ordering::Release);
+                self.increment_commit_batch_idx();
+                // println!("commit batch id incremented to {}", self.commit_batch_idx.load(Ordering::SeqCst));
+                continue;
+            } else {
+                return cmt_batch_idx;
+            }
+        }
+    }
 
     pub fn set_done(&self, num_commit: usize) {
         self.num_commit.store(num_commit, Ordering::SeqCst);

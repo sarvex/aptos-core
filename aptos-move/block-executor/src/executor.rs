@@ -18,6 +18,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::btree_map::BTreeMap,
     hash::Hash,
+    hint,
     marker::PhantomData,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -309,8 +310,6 @@ where
             .read_set(idx_to_validate)
             .expect("Prior read-set must be recorded");
 
-        let commit_idx_before_validation = scheduler.get_commit_idx();
-
         let valid = read_set.iter().all(|r| {
             match versioned_data_cache.read(r.path(), idx_to_validate) {
                 Ok(Version(version, _)) => r.validate_version(version),
@@ -340,18 +339,18 @@ where
 
             scheduler.finish_abort(idx_to_validate, incarnation, guard)
         } else {
-            if commit_idx_before_validation == idx_to_validate {
-                scheduler.increase_commit_idx(idx_to_validate + 1);
+            // if commit_idx_before_validation == idx_to_validate {
+            //     scheduler.increase_commit_idx(idx_to_validate + 1);
 
-                match scheduler.produce_validation_task(idx_to_validate + 1) {
-                    Some((version, guard)) => {
-                        return SchedulerTask::ValidationTask(version, guard);
-                    }
-                    None => {
-                        return SchedulerTask::NoTask;
-                    }
-                }
-            }
+            //     match scheduler.produce_validation_task(idx_to_validate + 1) {
+            //         Some((version, guard)) => {
+            //             return SchedulerTask::ValidationTask(version, guard);
+            //         }
+            //         None => {
+            //             return SchedulerTask::NoTask;
+            //         }
+            //     }
+            // }
             SchedulerTask::NoTask
         }
     }
@@ -373,16 +372,39 @@ where
 
         let mut scheduler_task = SchedulerTask::NoTask;
 
-        let mut local_cmt_idx = 0;
+        let mut local_cmt_txn_idx = 0;
+        let mut local_cmt_batch_idx = 0;
         let mut current_gas = 0;
         let is_first = scheduler.is_first();
 
         if is_first {
             while !scheduler.done() {
-                let cmt_idx = scheduler.get_commit_idx();
+                // try to increase committed batch idx
+                let cmt_batch_idx = scheduler.check_batch_done();
 
-                while local_cmt_idx < cmt_idx {
-                    let txn_gas = match last_input_output.write_set(local_cmt_idx).as_ref() {
+                if cmt_batch_idx == local_cmt_batch_idx {
+                    hint::spin_loop();
+                    continue;
+                }
+                assert!(cmt_batch_idx > 0);
+
+                local_cmt_batch_idx = cmt_batch_idx - 1;
+
+                // batch labeled with 0, ..., batch_num-1
+                // batch_size = (num_txn + batch_num - 1) / batch_num
+                // batch i contains txns [i * batch_size, min( (i + 1) * batch_size - 1, txn_num - 1 )]
+                // txn i belongs to batch (i / batch_size)
+                let cmt_txn_idx = std::cmp::min(
+                    (local_cmt_batch_idx + 1) * scheduler.batch_size() - 1,
+                    scheduler.num_txn() - 1,
+                );
+
+                // println!("num_txn {} batch_num {}", scheduler.num_txn(), scheduler.batch_num());
+                // println!("local_cmt_batch_idx {}, cmt_txn_idx {}", local_cmt_batch_idx, cmt_txn_idx);
+
+                while local_cmt_txn_idx <= cmt_txn_idx {
+                    // println!("local cmt txn idx {}", local_cmt_txn_idx);
+                    let txn_gas = match last_input_output.write_set(local_cmt_txn_idx).as_ref() {
                         ExecutionStatus::Success(t) => t.gas_used(),
                         ExecutionStatus::SkipRest(t) => t.gas_used(),
                         ExecutionStatus::Abort(_) => 0,
@@ -392,26 +414,26 @@ where
                         println!(
                             "thread {} set done local_cmt_idx {}",
                             rayon::current_thread_index().unwrap(),
-                            local_cmt_idx
+                            local_cmt_txn_idx
                         );
-                        scheduler.set_done(local_cmt_idx);
+                        scheduler.set_done(local_cmt_txn_idx);
                         break;
                     }
-                    local_cmt_idx += 1;
+                    local_cmt_txn_idx += 1;
                 }
-                if cmt_idx == scheduler.num_txn_to_execute() {
+                if local_cmt_txn_idx == scheduler.num_txn() {
                     println!(
                         "thread {} set done local_cmt_idx {}",
                         rayon::current_thread_index().unwrap(),
-                        local_cmt_idx
+                        local_cmt_txn_idx
                     );
-                    scheduler.set_done(cmt_idx);
+                    scheduler.set_done(local_cmt_txn_idx);
                     break;
                 }
             }
             // while !scheduler.all_finish() {
             // help other threads
-            for txn_idx in 0..scheduler.num_txn_to_execute() {
+            for txn_idx in 0..scheduler.num_txn() {
                 scheduler.resolve_condvar(txn_idx);
             }
             // }
@@ -483,7 +505,10 @@ where
 
         let num_txns = signature_verified_block.len();
         let last_input_output = TxnLastInputOutput::new(num_txns);
-        let scheduler = Scheduler::new(num_txns);
+        let max_gas = u64::MAX;
+        let batch_num = 50;
+        let batch_size = 100;
+        let scheduler = Scheduler::new(num_txns, max_gas, batch_num, batch_size);
 
         RAYON_EXEC_POOL.scope(|s| {
             for _ in 0..self.concurrency_level {
@@ -503,7 +528,7 @@ where
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
         // let num_txns = scheduler.num_txn_to_execute();
-        let num_txns = scheduler.num_txn_to_commit();
+        let num_txns = scheduler.num_txn_committed();
 
         let mut final_results = Vec::with_capacity(num_txns);
 
