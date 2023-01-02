@@ -383,7 +383,10 @@ impl AptosVM {
                         gas_meter,
                     )
                 },
-                TransactionPayload::ModuleBundle(_) => {
+
+                // Not reachable as this function should only be invoked for entry or script
+                // transaction payload.
+                _ => {
                     return Err(VMStatus::Error(StatusCode::UNREACHABLE));
                 },
             }
@@ -739,6 +742,12 @@ impl AptosVM {
                     payload,
                     log_context,
                 ),
+            TransactionPayload::Multisig(_) => {
+                // TODO
+                Err(VMStatus::Executed)
+            },
+
+            // Deprecated. Will be removed in the future.
             TransactionPayload::ModuleBundle(m) => {
                 self.execute_modules(storage, session, &mut gas_meter, &txn_data, m, log_context)
             },
@@ -1022,6 +1031,13 @@ impl AptosVM {
                 self.0.check_gas(storage, txn_data, log_context)?;
                 self.0.run_script_prologue(session, txn_data, log_context)
             },
+            TransactionPayload::Multisig(_) => {
+                self.0.check_gas(storage, txn_data, log_context)?;
+                // TODO: Update to run a different prologue.
+                self.0.run_script_prologue(session, txn_data, log_context)
+            },
+
+            // Deprecated. Will be removed in the future.
             TransactionPayload::ModuleBundle(_module) => {
                 if MODULE_BUNDLE_DISALLOWED.load(Ordering::Relaxed) {
                     return Err(VMStatus::Error(StatusCode::FEATURE_UNDER_GATING));
@@ -1330,6 +1346,12 @@ impl AptosSimulationVM {
                     log_context,
                 )
             },
+            TransactionPayload::Multisig(_) => {
+                // TODO
+                Err(VMStatus::Executed)
+            },
+
+            // Deprecated. Will be removed in the future.
             TransactionPayload::ModuleBundle(m) => {
                 self.0
                     .execute_modules(storage, session, &mut gas_meter, &txn_data, m, log_context)
