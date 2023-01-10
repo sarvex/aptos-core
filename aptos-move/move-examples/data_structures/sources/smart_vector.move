@@ -29,7 +29,7 @@ module aptos_framework::smart_vector {
 
     /// Create an empty vector using default logic to estimate `inline_capacity` and `bucket_size`, which may be
     /// inaccurate.
-    public fun empty<T: store>(): SmartVector<T> {
+    public fun empty<T>(): SmartVector<T> {
         SmartVector {
             inline_vec: vector[],
             big_vec: vector[],
@@ -40,7 +40,7 @@ module aptos_framework::smart_vector {
 
     /// Create an empty vector with customized config.
     /// When inline_capacity = 0, SmartVector degrades to a wrapper of BigVector.
-    public fun empty_with_config<T: store>(inline_capacity: u64, bucket_size: u64): SmartVector<T> {
+    public fun empty_with_config<T>(inline_capacity: u64, bucket_size: u64): SmartVector<T> {
         assert!(bucket_size > 0, error::invalid_argument(EZERO_BUCKET_SIZE));
         SmartVector {
             inline_vec: vector[],
@@ -51,7 +51,7 @@ module aptos_framework::smart_vector {
     }
 
     /// Create a vector of length 1 containing the passed in element.
-    public fun singleton<T: store>(element: T): SmartVector<T> {
+    public fun singleton<T>(element: T): SmartVector<T> {
         let v = empty();
         push_back(&mut v, element);
         v
@@ -93,7 +93,7 @@ module aptos_framework::smart_vector {
     /// Empty and destroy the other vector, and push each of the elements in the other vector onto the lhs vector in the
     /// same order as they occurred in other.
     /// Disclaimer: This function may be costly. Use it at your own discretion.
-    public fun append<T: store>(lhs: &mut SmartVector<T>, other: SmartVector<T>) {
+    public fun append<T>(lhs: &mut SmartVector<T>, other: SmartVector<T>) {
         let other_len = length(&other);
         let half_other_len = other_len / 2;
         let i = 0;
@@ -210,7 +210,7 @@ module aptos_framework::smart_vector {
 
     /// Swap the elements at the i'th and j'th indices in the vector v. Will abort if either of i or j are out of bounds
     /// for v.
-    public fun swap<T: store>(v: &mut SmartVector<T>, i: u64, j: u64) {
+    public fun swap<T>(v: &mut SmartVector<T>, i: u64, j: u64) {
         if (i > j) {
             return swap(v, j, i)
         };
