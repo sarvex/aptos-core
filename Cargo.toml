@@ -80,6 +80,8 @@ members = [
     "ecosystem/indexer-grpc/indexer-grpc-fullnode",
     "ecosystem/node-checker",
     "ecosystem/node-checker/fn-check-client",
+    "ecosystem/indexer-grpc/indexer-grpc-fullnode",
+    "ecosystem/indexer-grpc/indexer-grpc-parser",
     "execution/db-bootstrapper",
     "execution/executor",
     "execution/executor-benchmark",
@@ -214,6 +216,7 @@ aptos-global-constants = { path = "config/global-constants" }
 aptos-id-generator = { path = "crates/aptos-id-generator" }
 aptos-indexer = { path = "crates/indexer" }
 aptos-indexer-grpc-fullnode = { path = "ecosystem/indexer-grpc/indexer-grpc-fullnode" }
+aptos-indexer-grpc-parser = { path = "ecosystem/indexer-grpc/indexer-grpc-parser" }
 aptos-infallible = { path = "crates/aptos-infallible" }
 aptos-inspection-service = { path = "crates/inspection-service" }
 aptos-jellyfish-merkle = { path = "storage/jellyfish-merkle" }
