@@ -2605,6 +2605,7 @@ dependencies = [
  "aptos-storage-interface",
  "aptos-types",
  "async-trait",
+ "lru",
  "move-binary-format",
  "tokio",
 ]

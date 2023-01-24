@@ -19,6 +19,7 @@ use aptos_types::{
     state_store::{state_key::StateKey, state_value::StateValue},
     transaction::{Transaction, Version},
 };
+use lru::LruCache;
 use move_binary_format::file_format::CompiledModule;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -126,6 +127,11 @@ async fn handler_thread<'a>(
         std::sync::mpsc::Sender<Option<Vec<u8>>>,
     )>,
 ) {
+    const M: usize = 1024 * 1024;
+    let cache = Arc::new(Mutex::new(
+        LruCache::<(StateKey, Version), Option<Vec<u8>>>::new(M),
+    ));
+
     loop {
         let (key, version, sender) =
             if let Some((key, version, sender)) = thread_receiver.recv().await {
@@ -133,15 +139,22 @@ async fn handler_thread<'a>(
             } else {
                 break;
             };
-        let db = db.clone();
-        tokio::spawn(async move {
-            let val = db
-                .get_state_value_by_version(&key, version - 1)
-                .await
-                .ok()
-                .and_then(|v| v.map(|s| s.into_bytes()));
-            sender.send(val)
-        });
+
+        if let Some(val) = cache.lock().unwrap().get(&(key.clone(), version)) {
+            sender.send(val.clone()).unwrap();
+        } else {
+            let db = db.clone();
+            let cache = cache.clone();
+            tokio::spawn(async move {
+                let val = db
+                    .get_state_value_by_version(&key, version - 1)
+                    .await
+                    .ok()
+                    .and_then(|v| v.map(|s| s.into_bytes()));
+                cache.lock().unwrap().put((key, version), val.clone());
+                sender.send(val)
+            });
+        }
     }
 }
 
