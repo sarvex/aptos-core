@@ -822,7 +822,7 @@ dependencies = [
  "aptos-types",
  "aptos-validator-interface",
  "aptos-vm",
- "clap 3.2.17",
+ "clap 3.2.23",
  "move-binary-format",
  "move-cli",
  "move-compiler",

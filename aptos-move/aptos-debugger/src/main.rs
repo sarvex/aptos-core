@@ -18,13 +18,16 @@ pub struct Argument {
 
     #[clap(long)]
     limit: u64,
+
+    #[clap(long, default_value = "1")]
+    concurrency_level: usize,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     aptos_logger::Logger::new().init();
-    AptosVM::set_concurrency_level_once(8);
     let args = Argument::parse();
+    AptosVM::set_concurrency_level_once(args.concurrency_level);
 
     let debugger = AptosDebugger::rest_client(Client::new(Url::parse(&args.endpoint)?))?;
 
