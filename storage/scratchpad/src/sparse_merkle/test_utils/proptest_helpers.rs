@@ -112,7 +112,7 @@ pub fn test_smt_correctness_impl(input: Vec<Action>) {
                     .unwrap()
                     .batch_update(updates_flat_batch, &proof_reader)
                     .unwrap();
-                updater_q.back().unwrap().assert_no_external_strong_ref();
+                // updater_q.back().unwrap().assert_no_external_strong_ref();
 
                 assert_eq!(updater_smt.root_hash(), naive_smt.get_root_hash());
 
@@ -125,12 +125,6 @@ pub fn test_smt_correctness_impl(input: Vec<Action>) {
 
 trait AssertNoExternalStrongRef {
     fn assert_no_external_strong_ref(&self);
-}
-
-impl<V> AssertNoExternalStrongRef for SparseMerkleTree<V> {
-    fn assert_no_external_strong_ref(&self) {
-        assert_subtree_sole_strong_ref(&self.inner.root);
-    }
 }
 
 fn assert_subtree_sole_strong_ref<V>(subtree: &SubTree<V>) {

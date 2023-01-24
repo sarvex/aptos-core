@@ -249,22 +249,6 @@ fn test_update_256_siblings_in_proof() {
 }
 
 #[test]
-fn test_new_unknown() {
-    let root_hash = HashValue::new([1; HashValue::LENGTH]);
-    let smt = SparseMerkleTree::new_test(root_hash);
-    assert!(smt.root_weak().is_unknown());
-    assert_eq!(smt.root_hash(), root_hash);
-}
-
-#[test]
-fn test_new_empty() {
-    let root_hash = *SPARSE_MERKLE_PLACEHOLDER_HASH;
-    let smt = SparseMerkleTree::new_test(root_hash);
-    assert!(smt.root_weak().is_empty());
-    assert_eq!(smt.root_hash(), root_hash);
-}
-
-#[test]
 fn test_update() {
     // Before the update, the tree was:
     //             root

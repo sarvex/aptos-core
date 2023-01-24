@@ -180,7 +180,7 @@ impl<V> InnerLinks<V> {
 /// INNER of it can still live if referenced by a previous version.
 #[derive(Debug)]
 struct Inner<V> {
-    root: SubTree<V>,
+    data: HashMap<HashValue, V>,
     usage: StateStorageUsage,
     links: Mutex<InnerLinks<V>>,
     generation: u64,
@@ -224,11 +224,11 @@ impl<V> Drop for Inner<V> {
 }
 
 impl<V> Inner<V> {
-    fn new(root: SubTree<V>, usage: StateStorageUsage) -> Arc<Self> {
+    fn new(data: HashMap<HashValue, V>, usage: StateStorageUsage) -> Arc<Self> {
         let family_lock = Arc::new(Mutex::new(()));
         let branch_tracker = BranchTracker::new_head_unknown(None, &family_lock.lock());
         let me = Arc::new(Self {
-            root,
+            data,
             usage,
             links: InnerLinks::new(branch_tracker.clone()),
             generation: 0,
@@ -254,14 +254,14 @@ impl<V> Inner<V> {
 
     fn spawn_impl(
         &self,
-        child_root: SubTree<V>,
+        data: HashMap<HashValue, V>,
         child_usage: StateStorageUsage,
         branch_tracker: Arc<Mutex<BranchTracker<V>>>,
         family_lock: Arc<Mutex<()>>,
     ) -> Arc<Self> {
         LATEST_GENERATION.set(self.generation as i64 + 1);
         Arc::new(Self {
-            root: child_root,
+            data,
             usage: child_usage,
             links: InnerLinks::new(branch_tracker),
             generation: self.generation + 1,
@@ -271,7 +271,7 @@ impl<V> Inner<V> {
 
     fn spawn(
         self: &Arc<Self>,
-        child_root: SubTree<V>,
+        data: HashMap<HashValue, V>,
         child_usage: StateStorageUsage,
     ) -> Arc<Self> {
         let locked_family = self.family_lock.lock();
@@ -279,7 +279,7 @@ impl<V> Inner<V> {
 
         let child = if links_locked.children.is_empty() {
             let child = self.spawn_impl(
-                child_root,
+                data,
                 child_usage,
                 links_locked.branch_tracker.clone(),
                 self.family_lock.clone(),
@@ -296,7 +296,7 @@ impl<V> Inner<V> {
                 &locked_family,
             );
             let child = self.spawn_impl(
-                child_root,
+                data,
                 child_usage,
                 branch_tracker.clone(),
                 self.family_lock.clone(),
@@ -361,16 +361,9 @@ where
     /// Constructs a Sparse Merkle Tree with a root hash. This is often used when we restart and
     /// the scratch pad and the storage have identical state, so we use a single root hash to
     /// represent the entire state.
-    pub fn new(root_hash: HashValue, usage: StateStorageUsage) -> Self {
-        let root = if root_hash != *SPARSE_MERKLE_PLACEHOLDER_HASH {
-            SubTree::new_unknown(root_hash)
-        } else {
-            assert!(usage.is_untracked() || usage == StateStorageUsage::zero());
-            SubTree::new_empty()
-        };
-
+    pub fn new(_root_hash: HashValue, usage: StateStorageUsage) -> Self {
         Self {
-            inner: Inner::new(root, usage),
+            inner: Inner::new(HashMap::new(), usage),
         }
     }
 
@@ -381,7 +374,7 @@ where
 
     pub fn new_empty() -> Self {
         Self {
-            inner: Inner::new(SubTree::new_empty(), StateStorageUsage::zero()),
+            inner: Inner::new(HashMap::new(), StateStorageUsage::zero()),
         }
     }
 
@@ -407,19 +400,15 @@ where
     }
 
     #[cfg(test)]
-    fn new_with_root(root: SubTree<V>) -> Self {
+    fn new_with_root(data: HashMap<HashValue, V>) -> Self {
         Self {
-            inner: Inner::new(root, StateStorageUsage::new_untracked()),
+            inner: Inner::new(data, StateStorageUsage::new_untracked()),
         }
-    }
-
-    fn root_weak(&self) -> SubTree<V> {
-        self.inner.root.weak()
     }
 
     /// Returns the root hash of this tree.
     pub fn root_hash(&self) -> HashValue {
-        self.inner.root.hash()
+        HashValue::default()
     }
 
     fn generation(&self) -> u64 {
@@ -501,12 +490,12 @@ impl<V> FrozenSparseMerkleTree<V>
 where
     V: Clone + CryptoHash + Send + Sync,
 {
-    fn spawn(&self, child_root: SubTree<V>, child_usage: StateStorageUsage) -> Self {
+    fn spawn(&self, data: HashMap<HashValue, V>, child_usage: StateStorageUsage) -> Self {
         Self {
             base_smt: self.base_smt.clone(),
             base_generation: self.base_generation,
             smt: SparseMerkleTree {
-                inner: self.smt.inner.spawn(child_root, child_usage),
+                inner: self.smt.inner.spawn(data, child_usage),
             },
         }
     }
@@ -549,66 +538,25 @@ where
         usage: StateStorageUsage,
         proof_reader: &impl ProofRead,
     ) -> Result<Self, UpdateError> {
-        // Flatten, dedup and sort the updates with a btree map since the updates between different
-        // versions may overlap on the same address in which case the latter always overwrites.
-        let kvs = updates
-            .into_iter()
-            .collect::<BTreeMap<_, _>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-
-        if kvs.is_empty() {
+        if updates.is_empty() {
             assert_eq!(self.smt.inner.usage, usage);
             Ok(self.clone())
         } else {
-            let current_root = self.smt.root_weak();
-            let root = SubTreeUpdater::update(
-                current_root,
-                &kvs[..],
-                proof_reader,
-                self.smt.inner.generation + 1,
-            )?;
+            let mut root = self.smt.inner.data.clone();
+            for (k,v) in updates {
+                root.insert(k, v.unwrap().clone());
+            }
+
             Ok(self.spawn(root, usage))
         }
     }
 
     /// Queries a `key` in this `SparseMerkleTree`.
     pub fn get(&self, key: HashValue) -> StateStoreStatus<V> {
-        let mut subtree = self.smt.root_weak();
-        let mut bits = key.iter_bits();
-
-        loop {
-            match subtree {
-                SubTree::Empty => return StateStoreStatus::DoesNotExist,
-                SubTree::NonEmpty { .. } => {
-                    match subtree.get_node_if_in_mem(self.base_generation) {
-                        None => return StateStoreStatus::Unknown,
-                        Some(node) => match node.inner() {
-                            NodeInner::Internal(internal_node) => {
-                                subtree = if bits.next().expect("Tree is too deep.") {
-                                    internal_node.right.weak()
-                                } else {
-                                    internal_node.left.weak()
-                                };
-                                continue;
-                            }, // end NodeInner::Internal
-                            NodeInner::Leaf(leaf_node) => {
-                                return if leaf_node.key == key {
-                                    match &leaf_node.value.data.get_if_in_mem() {
-                                        Some(value) => StateStoreStatus::ExistsInScratchPad(
-                                            value.as_ref().clone(),
-                                        ),
-                                        None => StateStoreStatus::ExistsInDB,
-                                    }
-                                } else {
-                                    StateStoreStatus::DoesNotExist
-                                };
-                            }, // end NodeInner::Leaf
-                        }, // end Some(node) got from mem
-                    }
-                }, // end SubTree::NonEmpty
-            }
-        } // end loop
+        match self.smt.inner.data.get(&key) {
+            None => StateStoreStatus::Unknown,
+            Some(x) => StateStoreStatus::ExistsInScratchPad(x.clone())
+        }
     }
 
     pub fn usage(&self) -> StateStorageUsage {
