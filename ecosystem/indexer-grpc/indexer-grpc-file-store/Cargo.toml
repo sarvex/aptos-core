@@ -1,0 +1,20 @@
+[package]
+name = "aptos-indexer-grpc-file-store"
+version = "0.1.0"
+edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = { workspace = true }
+aptos-crash-handler = { workspace = true }
+aptos-indexer-grpc-gcs-utils = { workspace = true }
+aptos-logger = { workspace = true }
+cloud-storage = { workspace = true }
+deadpool-redis = { workspace = true }
+futures-util = { workspace = true }
+moving-average = { workspace = true }
+redis = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+warp = { workspace = true }
