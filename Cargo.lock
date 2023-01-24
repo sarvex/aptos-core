@@ -1369,6 +1369,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aptos-indexer-grpc-data-service"
+version = "0.1.0"
+dependencies = [
+ "aptos-crash-handler",
+ "aptos-logger",
+ "aptos-protos",
+ "deadpool-redis",
+ "futures",
+ "moving-average",
+ "prost",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "warp",
+]
+
+[[package]]
 name = "aptos-indexer-grpc-file-store"
 version = "0.1.0"
 dependencies = [
