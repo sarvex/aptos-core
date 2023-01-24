@@ -61,4 +61,40 @@ impl InstallationMethod {
         };
         Ok(installation_method)
     }
+
+    pub fn get_instructions(&self) -> Option<&'static str> {
+        match self {
+            // Don't tell people to upgrade when they're building from source.
+            InstallationMethod::Source => None,
+            InstallationMethod::Homebrew => Some("brew upgrade aptos"),
+            InstallationMethod::Other => Some("aptos update"),
+        }
+    }
+}
+
+/// Print a message telling the user to update if one is available. We tell them
+/// different update instructions depending on what we detect about how they
+/// installed the CLI. If something goes wrong we just keep going.
+pub fn print_update_message_if_required(repo_owner: &str, repo_name: &str) {
+    let _ = _print_update_message_if_required(repo_owner, repo_name);
+}
+
+pub fn _print_update_message_if_required(repo_owner: &str, repo_name: &str) -> Result<()> {
+    let info = check_if_update_required(repo_owner, repo_name)?;
+    if !info.update_required {
+        return Ok(());
+    }
+
+    let installation_method = InstallationMethod::from_env()?;
+    if let Some(instructions) = installation_method.get_instructions() {
+        eprintln!("===");
+        eprintln!(
+            "A new version of the Aptos CLI is available: v{} -> v{}.",
+            info.current_version, info.latest_version
+        );
+        eprintln!("Run this command to update: {}", instructions);
+        eprintln!("===\n");
+    }
+
+    Ok(())
 }

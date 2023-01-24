@@ -9,14 +9,21 @@
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-use aptos::{move_tool, Tool};
+use aptos::{move_tool, update::print_update_message_if_required, Tool};
 use clap::Parser;
 use std::process::exit;
 
 #[tokio::main]
 async fn main() {
+    // Tell the user if there is an update to the CLI available.
+    let _ = tokio::task::spawn_blocking(move || {
+        print_update_message_if_required("aptos-labs", "aptos-core")
+    })
+    .await;
+
     // Register hooks
     move_tool::register_package_hooks();
+
     // Run the corresponding tools
     let result = Tool::parse().execute().await;
 
