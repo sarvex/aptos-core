@@ -21,6 +21,12 @@ pub struct DbDir {
 
 impl DbDir {
     pub fn open_state_merkle_db(&self) -> Result<aptos_schemadb::DB> {
+        let _try_open_db_rw = aptos_schemadb::DB::open(
+            self.db_dir.join(STATE_MERKLE_DB_NAME).as_path(),
+            STATE_MERKLE_DB_NAME,
+            state_merkle_db_column_families(),
+            &aptos_schemadb::Options::default(),
+        ).ok();
         aptos_schemadb::DB::open_cf_as_secondary(
             &aptos_schemadb::Options::default(),
             self.db_dir.join(STATE_MERKLE_DB_NAME).as_path(),
@@ -31,6 +37,12 @@ impl DbDir {
     }
 
     pub fn open_ledger_db(&self) -> Result<aptos_schemadb::DB> {
+        let _try_open_rw = aptos_schemadb::DB::open(
+            self.db_dir.join(LEDGER_DB_NAME).as_path(),
+            LEDGER_DB_NAME,
+            ledger_db_column_families(),
+            &aptos_schemadb::Options::default(),
+        );
         aptos_schemadb::DB::open_cf_as_secondary(
             &aptos_schemadb::Options::default(),
             self.db_dir.join(LEDGER_DB_NAME).as_path(),
