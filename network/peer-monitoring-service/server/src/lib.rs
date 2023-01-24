@@ -23,7 +23,7 @@ use thiserror::Error;
 use tokio::runtime::Handle;
 
 mod logging;
-mod metrics;
+pub mod metrics;
 pub mod network;
 
 #[cfg(test)]
@@ -54,7 +54,7 @@ impl Error {
 pub struct PeerMonitoringServiceServer {
     bounded_executor: BoundedExecutor,
     network_requests: PeerMonitoringServiceNetworkEvents,
-    peer_metadata: Arc<PeersAndMetadata>,
+    peers_and_metadata: Arc<PeersAndMetadata>,
 }
 
 impl PeerMonitoringServiceServer {
@@ -62,7 +62,7 @@ impl PeerMonitoringServiceServer {
         config: PeerMonitoringServiceConfig,
         executor: Handle,
         network_requests: PeerMonitoringServiceNetworkEvents,
-        peer_metadata: Arc<PeersAndMetadata>,
+        peers_and_metadata: Arc<PeersAndMetadata>,
     ) -> Self {
         let bounded_executor =
             BoundedExecutor::new(config.max_concurrent_requests as usize, executor);
@@ -70,29 +70,33 @@ impl PeerMonitoringServiceServer {
         Self {
             bounded_executor,
             network_requests,
-            peer_metadata,
+            peers_and_metadata,
         }
     }
 
     /// Starts the peer monitoring service server thread
     pub async fn start(mut self) {
         // Handle the service requests
-        while let Some(request) = self.network_requests.next().await {
+        while let Some(network_request) = self.network_requests.next().await {
             // Log the request
-            let (peer, protocol, request, response_sender) = request;
-            debug!(LogSchema::new(LogEntry::ReceivedPeerMonitoringRequest)
-                .request(&request)
+            let peer_network_id = network_request.peer_network_id;
+            let protocol_id = network_request.protocol_id;
+            let peer_monitoring_service_request = network_request.peer_monitoring_service_request;
+            let response_sender = network_request.response_sender;
+            trace!(LogSchema::new(LogEntry::ReceivedPeerMonitoringRequest)
+                .request(&peer_monitoring_service_request)
                 .message(&format!(
                     "Received peer monitoring request. Peer: {:?}, protocol: {:?}.",
-                    peer, protocol,
+                    peer_network_id, protocol_id,
                 )));
 
             // All handler methods are currently CPU-bound so we want
             // to spawn on the blocking thread pool.
-            let peer_metadata = self.peer_metadata.clone();
+            let peer_metadata = self.peers_and_metadata.clone();
             self.bounded_executor
                 .spawn_blocking(move || {
-                    let response = Handler::new(peer_metadata).call(protocol, request);
+                    let response = Handler::new(peer_metadata)
+                        .call(protocol_id, peer_monitoring_service_request);
                     log_monitoring_service_response(&response);
                     response_sender.send(response);
                 })
@@ -144,7 +148,7 @@ impl Handler {
                 self.get_server_protocol_version()
             },
             PeerMonitoringServiceRequest::GetValidatorsAndVFNs => self.get_validators_and_vfns(),
-            PeerMonitoringServiceRequest::LatencyPing => self.handle_ping(),
+            PeerMonitoringServiceRequest::LatencyPing => self.handle_latency_ping(),
         };
 
         // Process the response and handle any errors
@@ -216,9 +220,9 @@ impl Handler {
         ))
     }
 
-    fn handle_ping(&self) -> Result<PeerMonitoringServiceResponse, Error> {
+    fn handle_latency_ping(&self) -> Result<PeerMonitoringServiceResponse, Error> {
         Err(Error::InvalidRequest(
-            "handle_ping() is currently unsupported!".into(),
+            "handle_latency_ping() is currently unsupported!".into(),
         ))
     }
 }

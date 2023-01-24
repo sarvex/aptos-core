@@ -327,15 +327,37 @@ impl NetworkConfig {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PeerMonitoringServiceConfig {
+    pub latency_monitoring: LatencyMonitoringConfig,
     pub max_concurrent_requests: u64, // Max num of concurrent server tasks
     pub max_network_channel_size: u64, // Max num of pending network messages
+    pub peer_monitor_loop_interval_secs: u64, // The interval (secs) between peer monitor loop executions
 }
 
 impl Default for PeerMonitoringServiceConfig {
     fn default() -> Self {
         Self {
+            latency_monitoring: LatencyMonitoringConfig::default(),
             max_concurrent_requests: 1000,
             max_network_channel_size: 1000,
+            peer_monitor_loop_interval_secs: 5,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct LatencyMonitoringConfig {
+    pub latency_ping_interval_secs: u64, // The interval (secs) between latency pings for each peer
+    pub max_latency_ping_failures: u64, // Max num of ping failures before the peer connection fails
+    pub max_latency_ping_timeout_secs: u64, // The max timeout (secs) for each latency ping
+}
+
+impl Default for LatencyMonitoringConfig {
+    fn default() -> Self {
+        Self {
+            latency_ping_interval_secs: 30,
+            max_latency_ping_failures: 3,
+            max_latency_ping_timeout_secs: 20,
         }
     }
 }
