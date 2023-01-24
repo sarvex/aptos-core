@@ -433,11 +433,10 @@ where
     pub fn batch_update(
         &self,
         updates: Vec<(HashValue, Option<&V>)>,
-        proof_reader: &impl ProofRead,
     ) -> Result<Self, UpdateError> {
         self.clone()
             .freeze()
-            .batch_update(updates, StateStorageUsage::zero(), proof_reader)
+            .batch_update(updates, StateStorageUsage::zero())
             .map(FrozenSparseMerkleTree::unfreeze)
     }
 
@@ -536,7 +535,6 @@ where
         &self,
         updates: Vec<(HashValue, Option<&V>)>,
         usage: StateStorageUsage,
-        proof_reader: &impl ProofRead,
     ) -> Result<Self, UpdateError> {
         if updates.is_empty() {
             assert_eq!(self.smt.inner.usage, usage);

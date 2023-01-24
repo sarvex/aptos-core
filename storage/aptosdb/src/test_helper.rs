@@ -97,7 +97,6 @@ pub fn update_in_memory_state(state: &mut StateDelta, txns_to_commit: &[Transact
                         .map(|(k, v)| (k.hash(), v.as_ref()))
                         .collect(),
                     StateStorageUsage::new_untracked(),
-                    &ProofReader::new_empty(),
                 )
                 .unwrap()
                 .unfreeze();
@@ -120,7 +119,6 @@ pub fn update_in_memory_state(state: &mut StateDelta, txns_to_commit: &[Transact
                     .map(|(k, v)| (k.hash(), v.as_ref()))
                     .collect(),
                 StateStorageUsage::new_untracked(),
-                &ProofReader::new_empty(),
             )
             .unwrap()
             .unfreeze();
@@ -838,7 +836,7 @@ pub fn put_as_state_root(db: &AptosDB, version: Version, key: StateKey, value: S
         .put::<JellyfishMerkleNodeSchema>(&NodeKey::new_empty_path(version), &leaf_node)
         .unwrap();
     let smt = SparseMerkleTree::<StateValue>::default()
-        .batch_update(vec![(key.hash(), Some(&value))], &ProofReader::new_empty())
+        .batch_update(vec![(key.hash(), Some(&value))])
         .unwrap();
     db.ledger_db
         .put::<StateValueSchema>(&(key.clone(), version), &Some(value.clone()))

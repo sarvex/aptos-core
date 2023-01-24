@@ -99,18 +99,12 @@ pub fn test_smt_correctness_impl(input: Vec<Action>) {
                     .collect::<Vec<_>>();
 
                 let committed = naive_q.front_mut().unwrap();
-                let proofs = updates_flat_batch
-                    .iter()
-                    .map(|(k, _)| (*k, committed.get_proof(k)))
-                    .collect();
-                let proof_reader = ProofReader::new(proofs);
-
                 let mut naive_smt = naive_q.back().unwrap().clone().update(&updates_flat_batch);
 
                 let updater_smt = updater_q
                     .back()
                     .unwrap()
-                    .batch_update(updates_flat_batch, &proof_reader)
+                    .batch_update(updates_flat_batch)
                     .unwrap();
                 // updater_q.back().unwrap().assert_no_external_strong_ref();
 
