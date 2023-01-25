@@ -51,7 +51,11 @@ impl AptosValidatorInterface for RestDebuggerInterface {
             StateKey::AccessPath(path) => match path.get_path() {
                 Path::Code(module_id) => Ok(Some(StateValue::new(
                     self.0
-                        .get_account_module_bcs(*module_id.address(), module_id.name().as_str())
+                        .get_account_module_bcs_at_version(
+                            *module_id.address(),
+                            module_id.name().as_str(),
+                            version,
+                        )
                         .await
                         .map_err(|err| anyhow!("Failed to get account states: {:?}", err))?
                         .into_inner()
