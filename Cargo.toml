@@ -77,6 +77,7 @@ members = [
     "crates/short-hex-str",
     "crates/transaction-emitter",
     "crates/transaction-emitter-lib",
+    "ecosystem/indexer-grpc/indexer-grpc-cache-worker",
     "ecosystem/indexer-grpc/indexer-grpc-fullnode",
     "ecosystem/node-checker",
     "ecosystem/node-checker/fn-check-client",
@@ -214,6 +215,7 @@ aptos-global-constants = { path = "config/global-constants" }
 aptos-id-generator = { path = "crates/aptos-id-generator" }
 aptos-indexer = { path = "crates/indexer" }
 aptos-indexer-grpc-fullnode = { path = "ecosystem/indexer-grpc/indexer-grpc-fullnode" }
+aptos-indexer-grpc-cache-worker = { path = "ecosystem/indexer-grpc/indexer-grpc-cache-worker" }
 aptos-infallible = { path = "crates/aptos-infallible" }
 aptos-inspection-service = { path = "crates/inspection-service" }
 aptos-jellyfish-merkle = { path = "storage/jellyfish-merkle" }
@@ -339,6 +341,7 @@ flate2 = "1.0.24"
 fs_extra = "1.2.0"
 futures = "= 0.3.24" # Previously futures v0.3.23 caused some consensus network_tests to fail. We now pin the dependency to v0.3.24.
 futures-channel = "= 0.3.24"
+futures-core = "0.3.25"
 futures-util = "0.3.21"
 gcp-bigquery-client = "0.13.0"
 get_if_addrs = "0.5.3"
@@ -358,6 +361,8 @@ indicatif = "0.15.0"
 indoc = "1.0.6"
 ipnet = "2.5.0"
 itertools = "0.10.3"
+redis = { version = "0.22.3", features = ["tokio-comp"] }
+redis-test = "0.1.0"
 jemallocator = { version = "0.3.2", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
 json-patch = "0.2.6"
 jsonwebtoken = "8.1"
