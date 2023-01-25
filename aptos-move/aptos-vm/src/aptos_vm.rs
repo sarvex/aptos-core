@@ -1260,6 +1260,8 @@ impl AptosVM {
         payload: &TransactionPayload,
         txn_data: &TransactionMetadata,
         log_context: &AdapterLogSchema,
+        // Whether the prologue is run as part of tx simulation.
+        is_simulation: bool,
     ) -> Result<(), VMStatus> {
         match payload {
             TransactionPayload::Script(_) => {
@@ -1273,8 +1275,15 @@ impl AptosVM {
             },
             TransactionPayload::Multisig(multisig_payload) => {
                 self.0.check_gas(storage, txn_data, log_context)?;
-                self.0
-                    .run_multisig_prologue(session, txn_data, multisig_payload, log_context)
+                // Skip validation if this is part of tx simulation.
+                // This allows simulating multisig txs without having to first create the multisig
+                // tx.
+                if !is_simulation {
+                    self.0
+                        .run_multisig_prologue(session, txn_data, multisig_payload, log_context)
+                } else {
+                    Ok(())
+                }
             },
 
             // Deprecated. Will be removed in the future.
@@ -1417,6 +1426,7 @@ impl VMAdapter for AptosVM {
             transaction.payload(),
             &txn_data,
             log_context,
+            false,
         )
     }
 
@@ -1528,6 +1538,7 @@ impl AptosSimulationVM {
             transaction.payload(),
             txn_data,
             log_context,
+            true,
         )
     }
 
