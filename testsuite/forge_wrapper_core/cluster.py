@@ -48,11 +48,11 @@ def list_eks_clusters(shell: Shell) -> List[str]:
     # This type annotation is not enforced, just helpful
     try:
         cluster_result: AwsListClusterResult = json.loads(cluster_json.decode())
-        clusters = []
-        for cluster_name in cluster_result["clusters"]:
-            if cluster_name.startswith("aptos-forge-"):
-                clusters.append(cluster_name)
-        return clusters
+        return [
+            cluster_name
+            for cluster_name in cluster_result["clusters"]
+            if cluster_name.startswith("aptos-forge-")
+        ]
     except Exception as e:
         raise AwsError("Failed to list eks clusters") from e
 

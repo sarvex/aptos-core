@@ -28,8 +28,7 @@ class PrivateKey:
 
     @staticmethod
     def from_hex(value: str) -> PrivateKey:
-        if value[0:2] == "0x":
-            value = value[2:]
+        value = value.removeprefix("0x")
         return PrivateKey(SigningKey(bytes.fromhex(value)))
 
     def hex(self) -> str:

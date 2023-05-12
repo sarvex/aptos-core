@@ -364,9 +364,7 @@ class EntryFunction:
     ) -> EntryFunction:
         module_id = ModuleId.from_str(module)
 
-        byte_args = []
-        for arg in args:
-            byte_args.append(arg.encode())
+        byte_args = [arg.encode() for arg in args]
         return EntryFunction(module_id, function, ty_args, byte_args)
 
     @staticmethod

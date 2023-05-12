@@ -137,7 +137,7 @@ class RestClient:
         source_data = self.account_resource(account_address, resource_type)["data"]
         data = source_data
 
-        while len(aggregator_path) > 0:
+        while aggregator_path:
             key = aggregator_path.pop()
             if key not in data:
                 raise ApiError(

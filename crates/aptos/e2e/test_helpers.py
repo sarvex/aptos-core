@@ -132,9 +132,8 @@ class RunHelper:
             LOG.debug(f"Running command: {command}")
             output = subprocess.check_output(command)
             LOG.debug(f"Output: {output}")
-        else:
-            if not os.path.isfile(self.cli_path):
-                raise RuntimeError(f"CLI not found at path: {self.cli_path}")
+        elif not os.path.isfile(self.cli_path):
+            raise RuntimeError(f"CLI not found at path: {self.cli_path}")
 
     # Get the account info of the account created by test_init.
     def get_account_info(self):

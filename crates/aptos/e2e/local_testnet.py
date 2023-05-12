@@ -76,7 +76,7 @@ def wait_for_startup(container_name: str, timeout: int):
             break
         except Exception:
             if count >= timeout:
-                LOG.error(f"Timeout while waiting for node / faucet to come up")
+                LOG.error("Timeout while waiting for node / faucet to come up")
                 raise
             count += 1
             time.sleep(1)

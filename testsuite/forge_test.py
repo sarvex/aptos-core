@@ -553,15 +553,12 @@ class ForgeFormattingTests(unittest.TestCase, AssertFixtureMixin):
         context = fake_context()
         context.upgrade_image_tag = context.image_tag
         txt = get_testsuite_images(context)
-        self.assertEqual(txt, f"`asdf`")
+        self.assertEqual(txt, "`asdf`")
 
     def testTestsuiteImagesUpgrade(self) -> None:
         context = fake_context()
         txt = get_testsuite_images(context)
-        self.assertEqual(
-            txt,
-            f"`asdf` ==> `upgrade_asdf`",
-        )
+        self.assertEqual(txt, "`asdf` ==> `upgrade_asdf`")
 
     def testReport(self) -> None:
         filesystem = SpyFilesystem({"test": b"banana"}, {})

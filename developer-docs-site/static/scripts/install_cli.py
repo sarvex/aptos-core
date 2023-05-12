@@ -85,10 +85,8 @@ def style(fg, bg, options):
         if not isinstance(options, (list, tuple)):
             options = [options]
 
-        for option in options:
-            codes.append(OPTIONS[option])
-
-    return "\033[{}m".format(";".join(map(str, codes)))
+        codes.extend(OPTIONS[option] for option in options)
+    return f'\033[{";".join(map(str, codes))}m'
 
 
 STYLES = {
@@ -105,8 +103,8 @@ def is_decorated():
     if WINDOWS:
         return (
             os.getenv("ANSICON") is not None
-            or "ON" == os.getenv("ConEmuANSI")
-            or "xterm" == os.getenv("Term")
+            or os.getenv("ConEmuANSI") == "ON"
+            or os.getenv("Term") == "xterm"
         )
 
     if not hasattr(sys.stdout, "fileno"):
@@ -129,10 +127,7 @@ def is_interactive():
 
 
 def colorize(style, text):
-    if not is_decorated():
-        return text
-
-    return f"{STYLES[style]}{text}\033[0m"
+    return text if not is_decorated() else f"{STYLES[style]}{text}\033[0m"
 
 
 def string_to_bool(value):
@@ -266,7 +261,7 @@ class Installer:
         if target is None:
             return 0
 
-        self._write(colorize("info", "Determined target to be: {}".format(target)))
+        self._write(colorize("info", f"Determined target to be: {target}"))
         self._write("")
 
         self.display_pre_message()
@@ -304,11 +299,7 @@ class Installer:
 
     def _install_comment(self, version: str, message: str):
         self._write(
-            "Installing {} CLI ({}): {}".format(
-                colorize("info", "Aptos"),
-                colorize("b", version),
-                colorize("comment", message),
-            )
+            f'Installing {colorize("info", "Aptos")} CLI ({colorize("b", version)}): {colorize("comment", message)}'
         )
 
     def build_binary_url(self, version: str, target: str) -> str:
@@ -403,7 +394,7 @@ class Installer:
 
     def get_version(self):
         latest_version = self.latest_release_info["tag_name"].split("-v")[-1]
-        self._write(colorize("info", "Latest CLI release: {}".format(latest_version)))
+        self._write(colorize("info", f"Latest CLI release: {latest_version}"))
 
         if self._force:
             return latest_version, None
@@ -418,9 +409,7 @@ class Installer:
         except Exception:
             current_version = None
 
-        self._write(
-            colorize("info", "Currently installed CLI: {}".format(current_version))
-        )
+        self._write(colorize("info", f"Currently installed CLI: {current_version}"))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=DeprecationWarning)
@@ -441,7 +430,7 @@ class Installer:
         arch = (platform.machine() or platform.processor()).lower()
 
         os = "windows" if WINDOWS else "macos" if MACOS else "linux"
-        if not arch in SUPPORTED_ARCHITECTURES[os]:
+        if arch not in SUPPORTED_ARCHITECTURES[os]:
             self._write(
                 colorize(
                     "error",

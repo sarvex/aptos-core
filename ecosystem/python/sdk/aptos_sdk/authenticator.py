@@ -128,7 +128,7 @@ class MultiAgentAuthenticator:
     def verify(self, data: bytes) -> bool:
         if not self.sender.verify(data):
             return False
-        return all([x[1].verify(data) for x in self.secondary_signers])
+        return all(x[1].verify(data) for x in self.secondary_signers)
 
     @staticmethod
     def deserialize(deserializer: Deserializer) -> MultiAgentAuthenticator:

@@ -309,11 +309,8 @@ class StructTag:
     @staticmethod
     def from_str(type_tag: str) -> StructTag:
         name = ""
-        index = 0
-        while index < len(type_tag):
+        for index in range(len(type_tag)):
             letter = type_tag[index]
-            index += 1
-
             if letter == "<":
                 raise NotImplementedError
             else:

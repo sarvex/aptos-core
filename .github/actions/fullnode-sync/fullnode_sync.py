@@ -77,13 +77,12 @@ def monitor_fullnode_syncing(fullnode_process_handle, bootstrapping_mode, node_l
     synced_version = get_synced_version_from_index_response(api_index_response, True)
 
     # Check if we've synced to the public version
-    if not synced_to_public_version:
-      if synced_version >= public_version:
-        time_to_sync_to_public = time.time() - start_sync_time
-        syncing_throughput = public_version / time_to_sync_to_public
-        print("Synced to version: {public_version}, in: {time_to_sync_to_public} seconds.".format(public_version=public_version, time_to_sync_to_public=time_to_sync_to_public))
-        print("Syncing throughput: {syncing_throughput} (versions per seconds).".format(syncing_throughput=syncing_throughput))
-        synced_to_public_version = True
+    if not synced_to_public_version and synced_version >= public_version:
+      time_to_sync_to_public = time.time() - start_sync_time
+      syncing_throughput = public_version / time_to_sync_to_public
+      print("Synced to version: {public_version}, in: {time_to_sync_to_public} seconds.".format(public_version=public_version, time_to_sync_to_public=time_to_sync_to_public))
+      print("Syncing throughput: {syncing_throughput} (versions per seconds).".format(syncing_throughput=syncing_throughput))
+      synced_to_public_version = True
 
     # Check if we've synced to the target version
     if synced_version >= target_version:
@@ -164,10 +163,20 @@ def spawn_fullnode(branch, network, bootstrapping_mode, continuous_syncing_mode,
 
   # Start the fullnode
   node_log_file = open(node_log_file_path, "w")
-  process_handle = subprocess.Popen(["cargo", "run", "-p", "aptos-node", "--release", "--", "-f", FULLNODE_CONFIG_NAME], stdout=node_log_file, stderr=node_log_file)
-
-  # Return the process handle
-  return process_handle
+  return subprocess.Popen(
+      [
+          "cargo",
+          "run",
+          "-p",
+          "aptos-node",
+          "--release",
+          "--",
+          "-f",
+          FULLNODE_CONFIG_NAME,
+      ],
+      stdout=node_log_file,
+      stderr=node_log_file,
+  )
 
 
 def setup_fullnode_config(bootstrapping_mode, continuous_syncing_mode, data_dir_file_path):
@@ -219,7 +228,7 @@ def main():
     "DATA_DIR_FILE_PATH",
     "NODE_LOG_FILE_PATH",
   ]
-  if not all(env in os.environ for env in REQUIRED_ENVS):
+  if any(env not in os.environ for env in REQUIRED_ENVS):
     raise Exception("Missing required ENV variables!")
 
   # Fetch each of the environment variables

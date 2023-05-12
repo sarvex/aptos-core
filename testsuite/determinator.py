@@ -59,9 +59,7 @@ class ChangedFilesPredicate(Predicate[ChangedFilesContext]):
     def evaluate(self, context: ChangedFilesContext) -> Verdict:
         matches = []
         for path in context["changed_files"]:
-            for pattern in self.patterns:
-                if re.match(pattern, path):
-                    matches.append(path)
+            matches.extend(path for pattern in self.patterns if re.match(pattern, path))
         return Verdict(
             bool(matches),
             f"Matched files: {matches}",
@@ -119,9 +117,8 @@ def changed_files(
         output = GithubOutput(github_output_key, "true" if verdict.verdict else "false")
         write_github_output(output)
         print(output.format())
-    else:
-        if not verdict.verdict:
-            raise SystemExit(1)
+    elif not verdict.verdict:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -32,11 +32,7 @@ class AccountAddress:
 
     @staticmethod
     def from_hex(address: str) -> AccountAddress:
-        addr = address
-
-        if address[0:2] == "0x":
-            addr = address[2:]
-
+        addr = address[2:] if address.startswith("0x") else address
         if len(addr) < AccountAddress.LENGTH * 2:
             pad = "0" * (AccountAddress.LENGTH * 2 - len(addr))
             addr = pad + addr

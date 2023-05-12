@@ -22,12 +22,11 @@ def helm(paths: Tuple[str]) -> None:
         result = shell.run(["helm", "lint", path])
         for line in result.output.decode().splitlines():
             if line.startswith("[ERROR]"):
-                match = re.match(
+                if match := re.match(
                     r".ERROR. (?P<section>[^:]+?): (?P<error_type>.*) at [(](?P<filename>.*):(?P<line>\d+)[)]: (?P<message>.*)",
                     line,
-                )
-                if match:
-                    fullpath = Path(path).parent / match.group("filename")
+                ):
+                    fullpath = Path(path).parent / match["filename"]
                     print(
                         "::error file={fullpath},line={line},col=1::{message}".format(
                             fullpath=fullpath, **match.groupdict()

@@ -291,26 +291,19 @@ def format_report(context: ForgeContext, result: ForgeResult) -> str:
             error_buffer.append(line)
     report_output = "\n".join(report_lines)
     error_output = "\n".join(error_buffer)
-    debugging_appendix = "Trailing Log Lines:\n{}\nDebugging output:\n{}".format(
-        error_output, result.debugging_output
-    )
+    debugging_appendix = f"Trailing Log Lines:\n{error_output}\nDebugging output:\n{result.debugging_output}"
     if not report_lines:
-        return "Forge test runner terminated:\n{}".format(debugging_appendix)
+        return f"Forge test runner terminated:\n{debugging_appendix}"
     report_text = None
     try:
         report_text = json.loads(report_output).get("text")
     except Exception as e:
-        return "Forge report malformed: {}\n{}\n{}".format(
-            e, repr(report_output), debugging_appendix
-        )
+        return f"Forge report malformed: {e}\n{repr(report_output)}\n{debugging_appendix}"
     if not report_text:
-        return "Forge report text empty. See test runner output.\n{}".format(
-            debugging_appendix
-        )
-    else:
-        if result.state == ForgeState.FAIL:
-            return "{}\n{}".format(report_text, debugging_appendix)
-        return report_text
+        return f"Forge report text empty. See test runner output.\n{debugging_appendix}"
+    if result.state == ForgeState.FAIL:
+        return f"{report_text}\n{debugging_appendix}"
+    return report_text
 
 
 def get_dashboard_link(
@@ -687,12 +680,10 @@ class K8sForgeRunner(ForgeRunner):
         elif (
             context.cloud == Cloud.GCP
         ):  # the GCP project for images is separate than the cluster
-            forge_image_repo = (
-                f"us-west1-docker.pkg.dev/aptos-global/aptos-internal/forge"
-            )
+            forge_image_repo = "us-west1-docker.pkg.dev/aptos-global/aptos-internal/forge"
             validator_node_selector = "" # no selector
-            # TODO: also no NAP node selector yet
-            # TODO: also registries need to be set up such that the default compute service account can access it:  $PROJECT_ID-compute@developer.gserviceaccount.com
+                # TODO: also no NAP node selector yet
+                # TODO: also registries need to be set up such that the default compute service account can access it:  $PROJECT_ID-compute@developer.gserviceaccount.com
         else:
             raise Exception(f"Unknown cloud: {context.cloud}")
 
@@ -886,8 +877,7 @@ def find_recent_images(
     i = 0
     for revision in git.last(commit_threshold):
         image_tag = f"{image_tag_prefix}{revision}"
-        exists = image_exists(shell, image_name, image_tag)
-        if exists:
+        if exists := image_exists(shell, image_name, image_tag):
             i += 1
             yield image_tag
         if i >= num_images:
@@ -920,10 +910,7 @@ def sanitize_forge_resource_name(forge_resource: str) -> str:
     for i, c in enumerate(forge_resource):
         if i >= max_length:
             break
-        if c.isalnum():
-            sanitized_namespace += c
-        else:
-            sanitized_namespace += "-"
+        sanitized_namespace += c if c.isalnum() else "-"
     if not forge_resource.startswith("forge-"):
         raise Exception("Forge resource name must start with 'forge-'")
     return sanitized_namespace
@@ -1098,20 +1085,16 @@ async def run_multiple(
 
 
 @main.command()
-# output files
 @envoption("FORGE_OUTPUT")
 @envoption("FORGE_REPORT")
 @envoption("FORGE_PRE_COMMENT")
 @envoption("FORGE_COMMENT")
 @envoption("GITHUB_STEP_SUMMARY")
-# cluster auth
 @envoption("CLOUD", "aws")
 @envoption("AWS_REGION", "us-west-2")
 @envoption("GCP_ZONE", "us-central1-c")
-# forge test runner customization
 @envoption("FORGE_RUNNER_MODE", "k8s")
 @envoption("FORGE_CLUSTER_NAME")
-# these override the args in forge-cli
 @envoption("FORGE_NUM_VALIDATORS")
 @envoption("FORGE_NUM_VALIDATOR_FULLNODES")
 @envoption("FORGE_NAMESPACE_KEEP")
@@ -1232,7 +1215,7 @@ def test(
 
     disabled_resolved_suites = set(all_resolved_suites) - set(enabled_resolved_suites)
 
-    if len(all_resolved_suites) == 0:
+    if not all_resolved_suites:
         print("No tests to run")
         return
     elif len(all_resolved_suites) == 1:
@@ -1305,8 +1288,6 @@ def test(
         # This might not work as intended because we dont know if that revision
         # passed forge
         image_tag = image_tag or second_latest_image
-        forge_image_tag = forge_image_tag or default_latest_image
-        upgrade_image_tag = upgrade_image_tag or default_latest_image
     else:
         # All other tests use just one image tag
         # Only try finding exactly 1 image
@@ -1320,9 +1301,8 @@ def test(
             )
         )
         image_tag = image_tag or default_latest_image
-        forge_image_tag = forge_image_tag or default_latest_image
-        upgrade_image_tag = upgrade_image_tag or default_latest_image
-
+    forge_image_tag = forge_image_tag or default_latest_image
+    upgrade_image_tag = upgrade_image_tag or default_latest_image
     assert_provided_image_tags_has_profile_or_features(
         image_tag,
         upgrade_image_tag,
@@ -1584,9 +1564,11 @@ def validate_forge_config_default_helm_values(value: Any) -> List[str]:
     errors = []
     try:
         keys = value["default_helm_values"].keys()
-        for chart in HELM_CHARTS:
-            if chart not in keys:
-                errors.append(f"Missing required chart {chart} in default_helm_values")
+        errors.extend(
+            f"Missing required chart {chart} in default_helm_values"
+            for chart in HELM_CHARTS
+            if chart not in keys
+        )
     except Exception as e:
         errors.append(f"Invalid default_helm_values: {e}")
 
@@ -1595,26 +1577,26 @@ def validate_forge_config_default_helm_values(value: Any) -> List[str]:
 
 def validate_forge_config(value: Any) -> List[str]:
     """Validate that the given forge config has all the required fields. Returns a list of error messages"""
-    errors = []
     if not isinstance(value, dict):
         return ["Value must be derived from dict"]
 
-    for field in default_forge_config().keys():
-        if field not in value:
-            errors.append(f"Missing required field {field}")
+    errors = [
+        f"Missing required field {field}"
+        for field in default_forge_config().keys()
+        if field not in value
+    ]
     if errors:
         return errors
-    for cluster in value["enabled_clusters"]:
-        if not isinstance(cluster, str):
-            errors.append("Cluster must be a string")
-
+    errors.extend(
+        "Cluster must be a string"
+        for cluster in value["enabled_clusters"]
+        if not isinstance(cluster, str)
+    )
     return errors
 
 
 def ensure_forge_config(value: Any) -> ForgeConfigValue:
-    # TODO: find a better way to do this
-    errors = validate_forge_config(value)
-    if errors:
+    if errors := validate_forge_config(value):
         raise Exception("Type had errors:\n" + "\n".join(errors))
     return value
 
@@ -1629,11 +1611,10 @@ def get_forge_config_diff(
     old_config_string = json.dumps(old_config, indent=2)
     old_lines = old_config_string.splitlines()
     new_lines = config_string.splitlines()
-    if full_diff:
-        diff = difflib.Differ()
-        return diff.compare(old_lines, new_lines)
-    else:
+    if not full_diff:
         return difflib.unified_diff(old_lines, new_lines)
+    diff = difflib.Differ()
+    return diff.compare(old_lines, new_lines)
 
 
 class ForgeConfigBackend:
@@ -1730,10 +1711,7 @@ class ForgeConfig:
 
     def set(self, key, value, validate: bool = True) -> None:
         new_config = {**self.config, key: value}
-        if validate:
-            self.config = ensure_forge_config(new_config)
-        else:
-            self.config = new_config  # type: ignore
+        self.config = ensure_forge_config(new_config) if validate else new_config
 
     def flush(self) -> None:
         self.backend.write(self.config)
@@ -1877,10 +1855,10 @@ def helm_config_get(chart: str) -> None:
 
     config.init()
 
-    default_helm_values = config.get("default_helm_values").get(chart)
-    if not default_helm_values:
+    if default_helm_values := config.get("default_helm_values").get(chart):
+        print(json.dumps(default_helm_values, indent=2))
+    else:
         raise Exception(f"No helm values found for chart {chart}")
-    print(json.dumps(default_helm_values, indent=2))
 
 
 @helm_config.command("set")
